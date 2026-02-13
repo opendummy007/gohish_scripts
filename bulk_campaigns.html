@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Gophish - Bulk Campaign Management</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f7; margin: 0; padding: 0; }
+      .container { max-width: 1080px; margin: 40px auto; background: #fff; padding: 24px 28px 32px; border-radius: 8px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08); }
+      h1 { margin-top: 0; font-size: 24px; color: #111827; }
+      p { color: #4b5563; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+      th, td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+      th { background: #f3f4f6; font-weight: 600; color: #374151; }
+      tr:hover td { background: #f9fafb; }
+      .status { font-weight: 600; }
+      .status-in-progress { color: #2563eb; }
+      .status-completed { color: #16a34a; }
+      .status-queued { color: #d97706; }
+      .controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 14px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; }
+      .btn-danger { background: #dc2626; color: #fff; }
+      .btn-danger:disabled { background: #fecaca; cursor: not-allowed; }
+      .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #e5e7eb; color: #374151; }
+      .empty { padding: 24px 0; color: #6b7280; font-style: italic; }
+      .meta { font-size: 12px; color: #6b7280; margin-top: 4px; }
+      .flash { margin-bottom: 12px; padding: 10px 12px; border-radius: 6px; font-size: 13px; }
+      .flash-success { background: #ecfdf3; color: #166534; border: 1px solid #bbf7d0; }
+      .flash-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+      @media (max-width: 640px) {
+        .container { margin: 16px; padding: 16px 16px 20px; }
+        table { font-size: 13px; }
+        th:nth-child(4), td:nth-child(4) { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Bulk Campaign Management</h1>
+      <p>
+        Use this page to see all campaigns for your current Gophish user and bulk delete selected campaigns
+        <strong>and all of their associated data</strong>.
+      </p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="flash {% if category == 'success' %}flash-success{% else %}flash-error{% endif %}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="post" action="{{ url_for('delete_campaigns') }}" id="bulkForm">
+        <div class="controls">
+          <div>
+            <label>
+              <input type="checkbox" id="selectAll" />
+              Select all campaigns
+            </label>
+          </div>
+          <div>
+            <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>
+              Delete selected campaigns
+            </button>
+          </div>
+        </div>
+
+        {% if campaigns %}
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px;"></th>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Created</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for c in campaigns %}
+            <tr>
+              <td>
+                <input type="checkbox" name="campaign_id" value="{{ c.id }}" class="row-check" />
+              </td>
+              <td>{{ c.id }}</td>
+              <td>{{ c.name }}</td>
+              <td>{{ c.created_date }}</td>
+              <td>
+                <span class="status
+                  {% if c.status == 'In progress' %}status-in-progress{% endif %}
+                  {% if c.status == 'Completed' %}status-completed{% endif %}
+                  {% if c.status == 'Queued' %}status-queued{% endif %}">
+                  {{ c.status }}
+                </span>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        <div class="meta">
+          Showing {{ campaigns|length }} campaigns.
+        </div>
+        {% else %}
+        <div class="empty">
+          There are currently no campaigns for this user.
+        </div>
+        {% endif %}
+      </form>
+    </div>
+
+    <script>
+      (function () {
+        var selectAll = document.getElementById('selectAll');
+        var deleteBtn = document.getElementById('deleteBtn');
+        var checkboxes = document.querySelectorAll('.row-check');
+
+        function updateButtonState() {
+          var anyChecked = false;
+          for (var i = 0; i < checkboxes.length; i++) {
+            if (checkboxes[i].checked) {
+              anyChecked = true;
+              break;
+            }
+          }
+          deleteBtn.disabled = !anyChecked;
+        }
+
+        if (selectAll) {
+          selectAll.addEventListener('change', function () {
+            for (var i = 0; i < checkboxes.length; i++) {
+              checkboxes[i].checked = selectAll.checked;
+            }
+            updateButtonState();
+          });
+        }
+
+        for (var i = 0; i < checkboxes.length; i++) {
+          checkboxes[i].addEventListener('change', function () {
+            updateButtonState();
+          });
+        }
+
+        var form = document.getElementById('bulkForm');
+        if (form) {
+          form.addEventListener('submit', function (e) {
+            if (deleteBtn.disabled) {
+              e.preventDefault();
+              return;
+            }
+            var confirmed = confirm('Are you sure you want to permanently delete the selected campaigns and all associated results/events? This cannot be undone.');
+            if (!confirmed) {
+              e.preventDefault();
+            }
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
+
