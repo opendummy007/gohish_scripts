@@ -55,7 +55,15 @@ def index():
     # Fetch campaign summaries
     data = _api_get("/campaigns/summary")
     campaigns = data.get("campaigns", [])
-    return render_template("bulk_campaigns.html", campaigns=campaigns)
+    
+    # Fetch all groups (userlists) and filter those with under 50 users
+    groups = _api_get("/groups/")
+    small_userlists = [
+        group for group in groups 
+        if len(group.get("targets", [])) < 50
+    ]
+    
+    return render_template("bulk_manager.html", campaigns=campaigns, userlists=small_userlists)
 
 
 @app.route("/delete", methods=["POST"])
@@ -83,6 +91,32 @@ def delete_campaigns():
             "Selected campaigns and their captured data were deleted successfully. Resources are preserved.",
             "success",
         )
+
+    return redirect(url_for("index"))
+
+
+@app.route("/delete_userlists", methods=["POST"])
+def delete_userlists():
+    ids = request.form.getlist("userlist_id")
+    if not ids:
+        flash("No userlists selected.", "error")
+        return redirect(url_for("index"))
+
+    last_error = None
+    deleted_count = 0
+    
+    for gid in ids:
+        try:
+            _api_delete(f"/groups/{gid}")
+            deleted_count += 1
+        except Exception as e:
+            last_error = e
+            print(f"Error deleting userlist {gid}: {e}")
+
+    if last_error:
+        flash(f"Deleted {deleted_count} userlist(s). Some could not be deleted. Check logs.", "warning")
+    else:
+        flash(f"Successfully deleted {deleted_count} userlist(s).", "success")
 
     return redirect(url_for("index"))
 
